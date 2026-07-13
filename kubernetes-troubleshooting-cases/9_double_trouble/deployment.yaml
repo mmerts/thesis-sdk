@@ -1,0 +1,111 @@
+##############################################################################
+# Case 12: Double Trouble - 2 Bugs (Redesigned for Reflexion)
+#
+# DIFFICULTY: Hard (2 bugs in DIFFERENT locations)
+#
+# SCENARIO:
+# - Backend pod is failing to start (ImagePullBackOff)
+# - Even after fixing image, service connectivity fails
+#
+# BUG 1: Wrong image tag (OBVIOUS - in Deployment)
+#   - Image: nginx:latst (typo, should be "latest")
+#   - Result: ImagePullBackOff - agent sees this immediately
+#
+# BUG 2: Wrong service targetPort (HIDDEN - in Service)
+#   - Backend listens on: port 80 (nginx default)
+#   - Service targetPort: 8080 (wrong!)
+#   - Result: After image fix, pod runs but connectivity fails
+#
+# EXPECTED BEHAVIOR:
+# - Trial 1: Agent fixes image typo -> Pod runs but connectivity FAILS
+# - Trial 2 without reflection: Agent confused, may try wrong fixes
+# - Trial 2 with reflection: "Fixed image, pod runs, but service fails - check ports"
+#
+# SUCCESS CRITERIA:
+# - Backend pod Running and Ready
+# - Frontend can curl backend-svc successfully
+##############################################################################
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: case12-double
+
+---
+# Backend Deployment (BUG 1: wrong image tag)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: case12-double
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: nginx:latst  # BUG 1: Typo! Should be "latest"
+          ports:
+            - containerPort: 80  # nginx listens on 80
+
+---
+# Backend Service (BUG 2: wrong targetPort)
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-svc
+  namespace: case12-double
+spec:
+  selector:
+    app: backend  # Correct selector
+  ports:
+    - port: 80
+      targetPort: 8080  # BUG 2: Should be 80 (nginx default)
+
+---
+# Frontend Deployment (test client)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: case12-double
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: curlimages/curl:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Frontend starting..."
+              for i in $(seq 1 10); do
+                echo "Attempt $i: Checking backend connectivity..."
+                if curl -s --max-time 5 http://backend-svc:80 > /dev/null 2>&1; then
+                  echo "SUCCESS: Backend is reachable!"
+                  sleep 3600
+                  exit 0
+                fi
+                echo "FAILED: Cannot connect to backend-svc:80"
+                sleep 3
+              done
+              echo "FATAL: Backend unreachable after 10 attempts"
+              exit 1
+          resources:
+            limits:
+              memory: "64Mi"
+              cpu: "100m"

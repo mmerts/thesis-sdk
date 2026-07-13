@@ -1,0 +1,182 @@
+##############################################################################
+# Case 11: ConfigMap + Selector Mismatch - 2 Bugs
+#
+# DIFFICULTY: Hard (2 bugs requiring systematic debugging)
+#
+# SCENARIO:
+# - Application pod keeps crashing
+# - Even after fixing crash, service connectivity fails
+#
+# BUG 1: ConfigMap missing required key (OBVIOUS - causes immediate crash)
+#   - App expects 'APP_CONFIG' key in ConfigMap
+#   - ConfigMap only has 'DB_HOST' key
+#   - Result: CrashLoopBackOff - agent sees this in logs
+#
+# BUG 2: Service selector mismatch (HIDDEN - causes no endpoints)
+#   - Service selector: app=webapp
+#   - Deployment labels: app=webapp-v2
+#   - Result: After ConfigMap fix, pod runs but service has no endpoints
+#
+# EXPECTED BEHAVIOR:
+# - Trial 1: Agent fixes ConfigMap -> Pod runs but service fails
+# - Reflection: "Fixed ConfigMap, pod running, but service not responding - no endpoints"
+# - Trial 2: Agent checks selector labels -> Success
+#
+# SUCCESS CRITERIA:
+# - App pod Running and Ready (1/1)
+# - Test client can curl webapp-svc successfully
+##############################################################################
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: case11-configmap-selector
+
+---
+# ConfigMap with WRONG key - BUG 1
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: case11-configmap-selector
+data:
+  # BUG 1: Wrong key! App expects 'APP_CONFIG' but we have 'DB_HOST'
+  DB_HOST: "localhost"
+  # Missing: APP_CONFIG: "production"
+
+---
+# Application Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: case11-configmap-selector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapp-v2
+  template:
+    metadata:
+      labels:
+        # BUG 2: Label is 'webapp-v2' but Service selector expects 'webapp'
+        app: webapp-v2
+    spec:
+      containers:
+        - name: webapp
+          image: alpine:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Check for required config from ConfigMap
+              if [ -z "$APP_CONFIG" ]; then
+                echo "=============================================="
+                echo "FATAL ERROR: APP_CONFIG not found!"
+                echo "The ConfigMap must contain key 'APP_CONFIG'"
+                echo "Current environment variables from ConfigMap:"
+                env | grep -E "^(APP_|DB_)" || echo "  (none found)"
+                echo "=============================================="
+                exit 1
+              fi
+              echo "Configuration loaded: $APP_CONFIG"
+              echo "=== Server starting on port 8080 ==="
+              echo "Pod labels: app=webapp-v2"
+
+              # Start HTTP server in background
+              while true; do
+                echo -e "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nApp is ready!" | nc -l -p 8080
+              done &
+
+              # Wait for service to be reachable
+              sleep 10
+              echo "Checking service connectivity..."
+              for i in 1 2 3 4 5; do
+                if wget -q -O- --timeout=2 http://webapp-svc:80 2>/dev/null | grep -q "ready"; then
+                  echo "Service connectivity OK!"
+                  wait
+                fi
+                echo "Attempt $i: Service not reachable"
+                sleep 5
+              done
+
+              echo "=============================================="
+              echo "FATAL: Service connectivity check failed!"
+              echo "Cannot reach webapp-svc:80 from within pod"
+              echo "=============================================="
+              exit 1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: APP_CONFIG
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: APP_CONFIG  # This key doesn't exist! Will crash
+                  optional: false
+          resources:
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
+
+---
+# Service with WRONG selector - BUG 2
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-svc
+  namespace: case11-configmap-selector
+spec:
+  selector:
+    # BUG 2: Selector expects 'webapp' but Deployment has 'webapp-v2'
+    app: webapp
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+# Test Client Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-client
+  namespace: case11-configmap-selector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-client
+  template:
+    metadata:
+      labels:
+        app: test-client
+    spec:
+      containers:
+        - name: test-client
+          image: curlimages/curl:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Test client starting..."
+              sleep 5
+              for i in $(seq 1 30); do
+                echo "Attempt $i: Checking webapp connectivity..."
+                response=$(curl -s --max-time 5 http://webapp-svc:80 2>/dev/null)
+                if echo "$response" | grep -q "ready"; then
+                  echo "SUCCESS: Webapp is reachable!"
+                  sleep 3600
+                  exit 0
+                fi
+                echo "FAILED: Cannot connect to webapp-svc:80"
+                echo "=== HINT: If pod is running but service fails, check: ==="
+                echo "  1. kubectl get endpoints webapp-svc (should have IP)"
+                echo "  2. Service selector must match pod labels!"
+                echo "==========================================================="
+                sleep 3
+              done
+              echo "FATAL: Webapp unreachable after 30 attempts"
+              exit 1
+          resources:
+            limits:
+              memory: "64Mi"
+              cpu: "100m"

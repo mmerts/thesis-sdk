@@ -1,0 +1,135 @@
+##############################################################################
+# Case 13: Triple Threat - 3 Bugs
+#
+# DIFFICULTY: Very Hard (3 simultaneous bugs)
+#
+# SCENARIO:
+# - A web application is completely broken
+# - Multiple issues need to be fixed
+#
+# BUG 1: Wrong image tag (typo)
+#   - Image: nginx:latets (typo, should be "latest")
+#   - Result: ImagePullBackOff
+#
+# BUG 2: ConfigMap not mounted
+#   - ConfigMap exists with correct config
+#   - But volume mount is missing in deployment
+#   - App falls back to wrong defaults
+#
+# BUG 3: Service port mismatch
+#   - App listens on port 80
+#   - Service targetPort is 8080
+#   - Result: Connection refused even if pod runs
+#
+# EXPECTED BEHAVIOR:
+# - Must fix ALL 3 bugs for success
+# - Reflexion should help identify remaining issues
+##############################################################################
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: case13-triple
+
+---
+# ConfigMap with correct configuration (exists but not mounted)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webapp-config
+  namespace: case13-triple
+data:
+  nginx.conf: |
+    server {
+        listen 80;
+        location / {
+            return 200 'Hello from webapp!\n';
+            add_header Content-Type text/plain;
+        }
+        location /health {
+            return 200 'OK\n';
+            add_header Content-Type text/plain;
+        }
+    }
+
+---
+# Web Application Deployment (3 BUGS)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: case13-triple
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:latets  # BUG 1: Typo! Should be "latest"
+          ports:
+            - containerPort: 80
+          # BUG 2: Missing volumeMounts for ConfigMap
+          # Should have:
+          # volumeMounts:
+          #   - name: config
+          #     mountPath: /etc/nginx/conf.d
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+      # BUG 2: Missing volumes definition
+      # Should have:
+      # volumes:
+      #   - name: config
+      #     configMap:
+      #       name: webapp-config
+
+---
+# Service (BUG 3: wrong targetPort)
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-svc
+  namespace: case13-triple
+spec:
+  selector:
+    app: webapp
+  ports:
+    - port: 80
+      targetPort: 8080  # BUG 3: Should be 80
+
+---
+# Test pod to verify connectivity
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-client
+  namespace: case13-triple
+spec:
+  containers:
+    - name: curl
+      image: curlimages/curl:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "Test client starting..."
+          for i in $(seq 1 15); do
+            echo "Attempt $i: Testing webapp-svc..."
+            if curl -s --max-time 3 http://webapp-svc:80 > /dev/null 2>&1; then
+              echo "SUCCESS: Webapp is reachable!"
+              sleep 3600
+              exit 0
+            fi
+            echo "FAILED: Cannot connect to webapp-svc:80"
+            sleep 4
+          done
+          echo "FATAL: Webapp unreachable after 15 attempts"
+          exit 1
+  restartPolicy: Always
