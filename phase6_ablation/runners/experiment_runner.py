@@ -107,7 +107,8 @@ class ExperimentRunner:
                 max_trials=ablation_config.max_trials,
                 reflection_enabled=ablation_config.reflection_enabled,
                 model=model_config.model_id,
-                verbose=False
+                verbose=False,
+                feedback_only=getattr(ablation_config, "feedback_only", False)
             )
 
             result = await loop.run(

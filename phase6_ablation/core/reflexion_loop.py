@@ -85,10 +85,14 @@ class ReflexionLoop:
         reflection_enabled: bool = True,
         memory_size: int = 3,
         model: str = "claude-haiku-4-5-20251001",
-        verbose: bool = False
+        verbose: bool = False,
+        feedback_only: bool = False
     ):
+        if reflection_enabled and feedback_only:
+            raise ValueError("reflection_enabled ve feedback_only ayni anda olamaz")
         self.max_trials = max_trials
         self.reflection_enabled = reflection_enabled
+        self.feedback_only = feedback_only
         self.memory_size = memory_size
         self.model = model
         self.verbose = verbose
@@ -117,7 +121,12 @@ class ReflexionLoop:
             ReflexionResult with success status and metrics
         """
         self._requires_connectivity_check = requires_connectivity_check
-        config_name = "full_reflexion" if self.reflection_enabled else "baseline"
+        if self.reflection_enabled:
+            config_name = "full_reflexion"
+        elif self.feedback_only:
+            config_name = "two_try_feedback"
+        else:
+            config_name = "baseline"
         print(f"\n{'=' * 70}")
         print(f"REFLEXION LOOP [{config_name}]: {pod_name}")
         print(f"Max trials: {self.max_trials} | Reflection: {self.reflection_enabled}")
@@ -151,16 +160,25 @@ class ReflexionLoop:
                 print(f"\n[SUCCESS] Pod fixed in Trial #{trial_num}")
                 break
 
-            # Generate reflection if enabled and not last trial
-            if self.reflection_enabled and self.reflector and trial_num < self.max_trials:
-                reflection = await self._generate_reflection(
-                    pod_name=pod_name,
-                    trajectory=getattr(self, '_last_trajectory', ''),
-                    evaluation={"pod_status": trial_result.pod_status}
-                )
-                if reflection:
-                    self.memory.add(reflection)
-                    trial_result.reflection_content = reflection
+            # Generate reflection (or raw feedback) if enabled and not last trial
+            if trial_num < self.max_trials:
+                if self.reflection_enabled and self.reflector:
+                    reflection = await self._generate_reflection(
+                        pod_name=pod_name,
+                        trajectory=getattr(self, '_last_trajectory', ''),
+                        evaluation={"pod_status": trial_result.pod_status}
+                    )
+                    if reflection:
+                        self.memory.add(reflection)
+                        trial_result.reflection_content = reflection
+                elif self.feedback_only:
+                    feedback = (
+                        f"The previous attempt failed. Evaluator feedback: "
+                        f"{trial_result.eval_reason} (Pod status: {trial_result.pod_status})"
+                    )
+                    print(f"\n[FEEDBACK] Raw evaluator feedback -> memory (no LLM)")
+                    self.memory.add(feedback)
+                    trial_result.reflection_content = feedback
 
         if not result.success:
             result.final_status = result.trials[-1].pod_status if result.trials else "Unknown"
@@ -190,7 +208,7 @@ class ReflexionLoop:
         # Phase 1: Actor generates trajectory
         print(f"\n[TRIAL {trial_num}] ACTOR: Generating trajectory...")
 
-        memory_to_use = self.memory.get_all() if self.reflection_enabled else None
+        memory_to_use = self.memory.get_all() if (self.reflection_enabled or self.feedback_only) else None
         if memory_to_use:
             print(f"  [MEMORY] Using {len(memory_to_use)} reflection(s)")
 
