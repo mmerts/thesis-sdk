@@ -21,6 +21,7 @@ class AblationConfig:
     max_trials: int
     reflection_enabled: bool
     description: str
+    feedback_only: bool = False  # raw evaluator feedback to memory, no reflection LLM
 
 
 BASELINE = AblationConfig(
@@ -44,7 +45,15 @@ TWO_TRY_NO_REFLECTION = AblationConfig(
     description="Two attempts without reflection (ablation control)"
 )
 
-ALL_ABLATION_CONFIGS: List[AblationConfig] = [BASELINE, FULL_REFLEXION, TWO_TRY_NO_REFLECTION]
+TWO_TRY_FEEDBACK = AblationConfig(
+    name="two_try_feedback",
+    max_trials=2,
+    reflection_enabled=False,
+    description="Two attempts with raw evaluator feedback, no reflection LLM (R2.1 control)",
+    feedback_only=True
+)
+
+ALL_ABLATION_CONFIGS: List[AblationConfig] = [BASELINE, FULL_REFLEXION, TWO_TRY_NO_REFLECTION, TWO_TRY_FEEDBACK]
 
 
 # =============================================================================
