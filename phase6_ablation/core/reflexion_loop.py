@@ -86,19 +86,22 @@ class ReflexionLoop:
         memory_size: int = 3,
         model: str = "claude-haiku-4-5-20251001",
         verbose: bool = False,
-        feedback_only: bool = False
+        feedback_only: bool = False,
+        self_verify: bool = False
     ):
         if reflection_enabled and feedback_only:
             raise ValueError("reflection_enabled ve feedback_only ayni anda olamaz")
         self.max_trials = max_trials
         self.reflection_enabled = reflection_enabled
         self.feedback_only = feedback_only
+        self.self_verify = self_verify
         self.memory_size = memory_size
         self.model = model
         self.verbose = verbose
 
         # Initialize components
-        self.actor = ActorAgent(model=model, verbose=True)  # Always verbose for debugging
+        self.actor = ActorAgent(model=model, verbose=True,  # Always verbose for debugging
+                                self_verify=self_verify)
         self.evaluator = ProgrammaticEvaluator(verbose=verbose)
         self.reflector = SelfReflectionAgent(model=model) if reflection_enabled else None
         self.memory = EpisodicMemory(max_size=memory_size)

@@ -53,12 +53,55 @@ Do NOT retry if something fails - just report what you did.
 """
 
 
+# R3.2 ablation variant: identical to SYSTEM_PROMPT except the verification
+# ban in PHASE 3 / RULES is replaced by an explicit verify-and-retry allowance.
+SYSTEM_PROMPT_SELF_VERIFY = """You are a Kubernetes troubleshooting expert.
+
+Your task is to diagnose and fix a problematic Kubernetes pod.
+
+## YOUR PROCESS (Follow these phases strictly):
+
+### PHASE 1: DIAGNOSE
+Run kubectl commands to understand the problem:
+- kubectl get pod <name> -n <namespace>
+- kubectl describe pod <name> -n <namespace>
+- kubectl logs <name> -n <namespace> (if container started)
+- kubectl get events -n <namespace>
+
+### PHASE 2: FIX
+Based on your diagnosis, apply the fix:
+- Use kubectl patch, set image, apply, delete, etc.
+- You may run multiple fix commands if needed
+
+### PHASE 3: VERIFY
+After applying the fix, verify that it worked:
+- Re-check the pod status with kubectl get/describe
+- If the problem persists, return to PHASE 1 and try a different fix
+- You may repeat the diagnose-fix-verify cycle at most 3 times
+When the pod is healthy, or you have used all cycles, output "FIX COMPLETE" and stop.
+
+## RULES:
+- Execute commands via bash tool
+- Be concise and efficient
+- Always end with "FIX COMPLETE"
+
+## CRITICAL - FORBIDDEN COMMANDS (will cause test failure):
+- NEVER use 'kubectl edit' - it opens an interactive editor and BREAKS the test
+- NEVER use vim, nano, vi, notepad, or any editor
+- If you cannot patch a pod directly, DELETE it and RECREATE with correct spec
+- Use 'kubectl delete pod X && kubectl apply -f' pattern instead of edit
+"""
+
+
 class ActorAgent:
     """Actor agent for Kubernetes troubleshooting."""
 
-    def __init__(self, model: str = "claude-haiku-4-5", verbose: bool = False):
+    def __init__(self, model: str = "claude-haiku-4-5", verbose: bool = False,
+                 self_verify: bool = False):
         self.model = model
         self.verbose = verbose
+        self.self_verify = self_verify
+        self.system_prompt = SYSTEM_PROMPT_SELF_VERIFY if self_verify else SYSTEM_PROMPT
         self.commands_executed = []  # Track all commands
 
     async def generate_trajectory(
@@ -83,7 +126,7 @@ class ActorAgent:
         prompt = self._build_prompt(pod_name, namespace, memory)
 
         options = ClaudeAgentOptions(
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=self.system_prompt,
             model=self.model,
             permission_mode="bypassPermissions"
         )
@@ -166,13 +209,19 @@ class ActorAgent:
     ) -> str:
         """Build the Actor prompt."""
 
+        if self.self_verify:
+            step3 = ('3. VERIFY: Check that the fix worked; if the problem persists, '
+                     'diagnose and fix again (at most 3 cycles), then output "FIX COMPLETE"')
+        else:
+            step3 = '3. STOP: Output "FIX COMPLETE" (do not verify)'
+
         prompt = f"""## TASK
 Fix the Kubernetes pod "{pod_name}" in namespace "{namespace}".
 
 ## STEPS
 1. DIAGNOSE: Run kubectl get/describe/logs to find the problem
 2. FIX: Apply kubectl commands to fix the issue
-3. STOP: Output "FIX COMPLETE" (do not verify)
+{step3}
 
 """
 

@@ -22,6 +22,7 @@ class AblationConfig:
     reflection_enabled: bool
     description: str
     feedback_only: bool = False  # raw evaluator feedback to memory, no reflection LLM
+    self_verify: bool = False  # actor may verify its own fix and retry in-context (R3.2 ablation)
 
 
 BASELINE = AblationConfig(
@@ -53,7 +54,15 @@ TWO_TRY_FEEDBACK = AblationConfig(
     feedback_only=True
 )
 
-ALL_ABLATION_CONFIGS: List[AblationConfig] = [BASELINE, FULL_REFLEXION, TWO_TRY_NO_REFLECTION, TWO_TRY_FEEDBACK]
+BASELINE_SELF_VERIFY = AblationConfig(
+    name="baseline_self_verify",
+    max_trials=1,
+    reflection_enabled=False,
+    description="Single trial, actor may self-verify and retry in-context (R3.2 ablation)",
+    self_verify=True
+)
+
+ALL_ABLATION_CONFIGS: List[AblationConfig] = [BASELINE, FULL_REFLEXION, TWO_TRY_NO_REFLECTION, TWO_TRY_FEEDBACK, BASELINE_SELF_VERIFY]
 
 
 # =============================================================================
