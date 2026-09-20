@@ -53,6 +53,12 @@ class TrialResult:
 
     # Evaluation details
     eval_reason: str = ""
+    # First evaluator sample (equals the verdict unless a stabilization window is used)
+    eval_first_success: bool = False
+    eval_first_reason: str = ""
+    eval_first_status: str = ""
+    eval_samples: int = 1
+    eval_settle_elapsed: float = 0.0
 
 
 @dataclass
@@ -88,7 +94,8 @@ class ReflexionLoop:
         verbose: bool = False,
         feedback_only: bool = False,
         self_verify: bool = False,
-        reflection_feedback: bool = False
+        reflection_feedback: bool = False,
+        eval_settle_s: int = 0
     ):
         if reflection_enabled and feedback_only:
             raise ValueError("reflection_enabled ve feedback_only ayni anda olamaz")
@@ -99,6 +106,7 @@ class ReflexionLoop:
         self.feedback_only = feedback_only
         self.self_verify = self_verify
         self.reflection_feedback = reflection_feedback
+        self.eval_settle_s = eval_settle_s
         self.memory_size = memory_size
         self.model = model
         self.verbose = verbose
@@ -257,13 +265,19 @@ class ReflexionLoop:
             pod_name=pod_name,
             namespace=namespace,
             wait_time=5,
-            requires_connectivity_check=getattr(self, '_requires_connectivity_check', False)
+            requires_connectivity_check=getattr(self, '_requires_connectivity_check', False),
+            settle_s=self.eval_settle_s
         )
         trial.eval_time = time.time() - eval_start
 
         trial.success = evaluation.get('success', False)
         trial.pod_status = evaluation.get('pod_status', 'Unknown')
         trial.eval_reason = evaluation.get('reason', 'Unknown')
+        trial.eval_first_success = evaluation.get('first_success', trial.success)
+        trial.eval_first_reason = evaluation.get('first_reason', trial.eval_reason)
+        trial.eval_first_status = evaluation.get('first_pod_status', trial.pod_status)
+        trial.eval_samples = evaluation.get('samples', 1)
+        trial.eval_settle_elapsed = evaluation.get('settle_elapsed', 0.0)
 
         status_icon = "[+]" if trial.success else "[-]"
         print(f"\n{status_icon} EVALUATION: {'SUCCESS' if trial.success else 'FAILURE'}")

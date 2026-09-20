@@ -15,6 +15,7 @@ Evaluation criteria:
 import subprocess
 import json
 import asyncio
+import time
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 
@@ -44,10 +45,18 @@ class ProgrammaticEvaluator:
         namespace: str = "default",
         wait_time: int = 5,
         check_service: bool = True,
-        requires_connectivity_check: bool = False
+        requires_connectivity_check: bool = False,
+        settle_s: int = 0
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
         Evaluate if the pod issue has been resolved.
+
+        settle_s: bounded stabilization window in seconds. 0 (default) keeps the
+        single sample taken wait_time seconds after the actor stops. If > 0, the
+        first sample is identical, and the cluster is then re-sampled every
+        wait_time seconds until it passes, until the connectivity probe reports
+        that the service is not responding on its port (a port fault does not
+        heal by waiting), or until settle_s seconds have elapsed.
 
         Returns:
             Tuple of (evaluation_result, metadata)
@@ -57,13 +66,26 @@ class ProgrammaticEvaluator:
         if self.verbose:
             print(f"\n[EVALUATOR] Checking pod: {pod_name} in namespace: {namespace}")
 
+        start = time.monotonic()
         result = await self._evaluate_pod(pod_name, namespace, check_service, requires_connectivity_check)
+        first = result
+        samples = 1
+        while (not result.success and "not responding on port" not in result.reason
+               and time.monotonic() - start + wait_time <= settle_s):
+            await asyncio.sleep(wait_time)
+            result = await self._evaluate_pod(pod_name, namespace, check_service, requires_connectivity_check)
+            samples += 1
 
         evaluation = {
             "success": result.success,
             "reason": result.reason,
             "pod_status": result.pod_status,
-            "pod_ready": result.pod_ready
+            "pod_ready": result.pod_ready,
+            "first_success": first.success,
+            "first_reason": first.reason,
+            "first_pod_status": first.pod_status,
+            "samples": samples,
+            "settle_elapsed": round(time.monotonic() - start, 1)
         }
 
         metadata = {

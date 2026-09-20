@@ -21,7 +21,7 @@ class FakeActor:
 
 class FakeEvaluator:
     async def evaluate(self, pod_name, namespace="default", wait_time=5,
-                       requires_connectivity_check=False):
+                       requires_connectivity_check=False, settle_s=0):
         return {"success": False, "pod_status": "CrashLoopBackOff",
                 "reason": "Pod not ready"}, {}
 

@@ -24,6 +24,7 @@ class AblationConfig:
     feedback_only: bool = False  # raw evaluator feedback to memory, no reflection LLM
     self_verify: bool = False  # actor may verify its own fix and retry in-context (R3.2 ablation)
     reflection_feedback: bool = False  # reflection LLM also receives the evaluator's textual reason (round-2 control)
+    eval_settle_s: int = 0  # evaluator stabilization window in seconds; 0 = single sample (round-2 timing check)
 
 
 BASELINE = AblationConfig(
@@ -71,7 +72,15 @@ FULL_REFLEXION_FEEDBACK = AblationConfig(
     reflection_feedback=True
 )
 
-ALL_ABLATION_CONFIGS: List[AblationConfig] = [BASELINE, FULL_REFLEXION, TWO_TRY_NO_REFLECTION, TWO_TRY_FEEDBACK, BASELINE_SELF_VERIFY, FULL_REFLEXION_FEEDBACK]
+BASELINE_SETTLE = AblationConfig(
+    name="baseline_settle",
+    max_trials=1,
+    reflection_enabled=False,
+    description="Single-shot baseline evaluated with a bounded 90 s stabilization window (round-2 timing check)",
+    eval_settle_s=90
+)
+
+ALL_ABLATION_CONFIGS: List[AblationConfig] = [BASELINE, FULL_REFLEXION, TWO_TRY_NO_REFLECTION, TWO_TRY_FEEDBACK, BASELINE_SELF_VERIFY, FULL_REFLEXION_FEEDBACK, BASELINE_SETTLE]
 
 
 # =============================================================================

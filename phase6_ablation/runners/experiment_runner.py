@@ -110,7 +110,8 @@ class ExperimentRunner:
                 verbose=False,
                 feedback_only=getattr(ablation_config, "feedback_only", False),
                 self_verify=getattr(ablation_config, "self_verify", False),
-                reflection_feedback=getattr(ablation_config, "reflection_feedback", False)
+                reflection_feedback=getattr(ablation_config, "reflection_feedback", False),
+                eval_settle_s=getattr(ablation_config, "eval_settle_s", 0)
             )
 
             result = await loop.run(
@@ -139,6 +140,11 @@ class ExperimentRunner:
                         "success": t.success,
                         "pod_status": t.pod_status,
                         "eval_reason": t.eval_reason,
+                        "eval_first_success": t.eval_first_success,
+                        "eval_first_reason": t.eval_first_reason,
+                        "eval_first_status": t.eval_first_status,
+                        "eval_samples": t.eval_samples,
+                        "eval_settle_elapsed": t.eval_settle_elapsed,
 
                         # Timing
                         "actor_time": t.actor_time,
