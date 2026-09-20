@@ -109,7 +109,8 @@ class ExperimentRunner:
                 model=model_config.model_id,
                 verbose=False,
                 feedback_only=getattr(ablation_config, "feedback_only", False),
-                self_verify=getattr(ablation_config, "self_verify", False)
+                self_verify=getattr(ablation_config, "self_verify", False),
+                reflection_feedback=getattr(ablation_config, "reflection_feedback", False)
             )
 
             result = await loop.run(

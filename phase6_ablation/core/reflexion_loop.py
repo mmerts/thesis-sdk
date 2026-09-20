@@ -87,14 +87,18 @@ class ReflexionLoop:
         model: str = "claude-haiku-4-5-20251001",
         verbose: bool = False,
         feedback_only: bool = False,
-        self_verify: bool = False
+        self_verify: bool = False,
+        reflection_feedback: bool = False
     ):
         if reflection_enabled and feedback_only:
             raise ValueError("reflection_enabled ve feedback_only ayni anda olamaz")
+        if reflection_feedback and not reflection_enabled:
+            raise ValueError("reflection_feedback icin reflection_enabled gerekli")
         self.max_trials = max_trials
         self.reflection_enabled = reflection_enabled
         self.feedback_only = feedback_only
         self.self_verify = self_verify
+        self.reflection_feedback = reflection_feedback
         self.memory_size = memory_size
         self.model = model
         self.verbose = verbose
@@ -125,7 +129,7 @@ class ReflexionLoop:
         """
         self._requires_connectivity_check = requires_connectivity_check
         if self.reflection_enabled:
-            config_name = "full_reflexion"
+            config_name = "full_reflexion_feedback" if self.reflection_feedback else "full_reflexion"
         elif self.feedback_only:
             config_name = "two_try_feedback"
         else:
@@ -166,10 +170,14 @@ class ReflexionLoop:
             # Generate reflection (or raw feedback) if enabled and not last trial
             if trial_num < self.max_trials:
                 if self.reflection_enabled and self.reflector:
+                    evaluation = {"pod_status": trial_result.pod_status}
+                    if self.reflection_feedback:
+                        # same information the feedback-only arm forwards: reason + pod status
+                        evaluation["reason"] = trial_result.eval_reason
                     reflection = await self._generate_reflection(
                         pod_name=pod_name,
                         trajectory=getattr(self, '_last_trajectory', ''),
-                        evaluation={"pod_status": trial_result.pod_status}
+                        evaluation=evaluation
                     )
                     if reflection:
                         self.memory.add(reflection)

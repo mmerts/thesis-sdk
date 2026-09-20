@@ -61,7 +61,46 @@ def test_two_try_no_reflection_unchanged():
     print("[PASS] test_two_try_no_reflection_unchanged")
 
 
+class FakeReflector:
+    def __init__(self):
+        self.received_evaluation = []
+
+    async def reflect(self, pod_name, trajectory, evaluation, memory=None):
+        self.received_evaluation.append(dict(evaluation))
+        return "fake reflection", {}
+
+
+def _run_reflexion(reflection_feedback):
+    loop = ReflexionLoop(max_trials=2, reflection_enabled=True,
+                         reflection_feedback=reflection_feedback,
+                         model="claude-haiku-4-5-20251001")
+    fake_actor, fake_reflector = FakeActor(), FakeReflector()
+    loop.actor = fake_actor
+    loop.evaluator = FakeEvaluator()
+    loop.reflector = fake_reflector
+    asyncio.run(loop.run("fake-pod", "fake-ns"))
+    return fake_actor, fake_reflector
+
+
+def test_reflection_feedback_passes_reason():
+    actor, reflector = _run_reflexion(reflection_feedback=True)
+    assert reflector.received_evaluation == [
+        {"pod_status": "CrashLoopBackOff", "reason": "Pod not ready"}
+    ], f"reflector reason almali: {reflector.received_evaluation!r}"
+    assert actor.received_memory[1] == ["fake reflection"], "actor yalniz reflection almali"
+    print("[PASS] test_reflection_feedback_passes_reason")
+
+
+def test_full_reflexion_unchanged():
+    actor, reflector = _run_reflexion(reflection_feedback=False)
+    assert reflector.received_evaluation == [{"pod_status": "CrashLoopBackOff"}],         f"varsayilan full_reflexion reason ALMAMALI: {reflector.received_evaluation!r}"
+    assert actor.received_memory[1] == ["fake reflection"]
+    print("[PASS] test_full_reflexion_unchanged")
+
+
 if __name__ == "__main__":
     test_feedback_only_bypass()
     test_two_try_no_reflection_unchanged()
+    test_reflection_feedback_passes_reason()
+    test_full_reflexion_unchanged()
     print("\nTUM TESTLER GECTI")

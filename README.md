@@ -19,6 +19,8 @@ Actor ──► Evaluator ──► success? ──► End
 
 The paper evaluates three configurations — **baseline** (single attempt), **two-try** (retry without reflection, an ablation control), and **Reflexion** (retry guided by reflection) — across 5 Claude models on 8 single-fault scenarios from KubeLLMBench plus 2 multi-fault scenarios: 5 models × 10 scenarios × 3 configurations × 10 runs = 1,500 analyzed experiments.
 
+Three post-hoc controls were added during peer review and run on the three models still available through the API (Haiku 4.5, Sonnet 4.5, Opus 4.5): **feedback-only** (`two_try_feedback`: the retry receives the evaluator's verbatim failure reason, no reflection), **reflection with reason** (`full_reflexion_feedback`: as Reflexion, but the reflection prompt also receives the evaluator's failure reason), and **self-verify** (`baseline_self_verify`: one attempt in which the actor may verify and revise its own fix).
+
 ## Repository Structure
 
 ```
@@ -26,10 +28,12 @@ phase6_ablation/
 ├── core/                 # Reflexion loop: actor, evaluator, self-reflection, episodic memory
 │   ├── agents/           #   actor.py, evaluator.py (programmatic, LLM-free), self_reflection.py
 │   ├── memory/           #   episodic_memory.py (FIFO, Ω = 3)
-│   └── configs/          #   experiment_configs.py (baseline / two-try / Reflexion)
+│   ├── configs/          #   experiment_configs.py (baseline / two-try / Reflexion + post-hoc controls)
+│   └── reflexion_loop.py #   trial loop used for all reported runs
+├── runners/              # experiment_runner.py: runner used for all reported runs
 ├── prompts/              # Actor and self-reflection prompt templates
 ├── tools/                # run_test.py (single run), ablation_test_runner.py (batch)
-├── scripts/              # create_database.py and analysis scripts
+├── scripts/              # create_database.py, analysis scripts, post-hoc control runners (run_*_experiment.py)
 ├── figures/              # Result figures (PDF/PNG)
 └── results/
     ├── raw/              # Per-run JSON logs (full command trajectory, tokens, cost, verdict)
@@ -63,7 +67,7 @@ The full per-run log is in **`phase6_ablation/results/results.db`** (SQLite). Th
 | Column | Description |
 |--------|-------------|
 | `model` | `haiku30`, `haiku35`, `haiku45`, `sonnet45`, `opus45` |
-| `config` | `baseline`, `two_try_no_reflection` ("two-try"), `full_reflexion` ("Reflexion") |
+| `config` | `baseline`, `two_try_no_reflection` ("two-try"), `full_reflexion` ("Reflexion"); post-hoc controls: `two_try_feedback`, `full_reflexion_feedback`, `baseline_self_verify` |
 | `case_id` | `case1` … `case11` |
 | `success` | Binary outcome from the programmatic evaluator |
 | `trials_used`, `total_time`, `total_cost`, `total_tokens` | Per-run measurements |
@@ -77,7 +81,7 @@ WHERE case_id IN ('case1','case2','case3','case4','case5','case6','case7','case8
 GROUP BY model, config;
 ```
 
-**Note on run counts:** the database contains 1,810 runs in total. The paper analyzes the original experiment matrix of 1,500 runs (cases 1–10, 10 runs per cell). The additional runs were collected after the paper's analysis was frozen: extended repetitions of the two multi-fault scenarios (`case9`, `case10`) and an exploratory two-fault scenario (`case11`, ConfigMap + selector) that is not analyzed in the paper. Raw per-run JSON logs, including full command trajectories, are under `phase6_ablation/results/raw/`.
+**Note on run counts:** the database contains 2,214 runs in total. The paper's main analysis uses the original experiment matrix of 1,500 runs (cases 1–10, 10 runs per cell). A further 310 runs of the three main configurations were collected after that analysis was frozen: extended repetitions of the two multi-fault scenarios (`case9`, `case10`) and an exploratory two-fault scenario (`case11`, ConfigMap + selector). The remaining 404 runs are the post-hoc controls: `two_try_feedback` (142), `full_reflexion_feedback` (142) and `baseline_self_verify` (120). The controls on `case9`/`case10` use the current instantiation of those scenarios, in which the agent is pointed at the faulty deployment; they are compared only with post-freeze runs (`run_id > 10`) of the other configurations, not with the matrix runs. Raw per-run JSON logs, including full command trajectories, are under `phase6_ablation/results/raw/`.
 
 ## Reproducing the Experiments
 
@@ -106,6 +110,16 @@ Rebuild the SQLite database from the raw JSON logs:
 ```bash
 python phase6_ablation/scripts/create_database.py
 ```
+
+Run the post-hoc controls (resumable; `--dry-run` and `--pilot` are supported):
+
+```bash
+python phase6_ablation/scripts/run_feedback_experiment.py             # two_try_feedback
+python phase6_ablation/scripts/run_reflection_feedback_experiment.py  # full_reflexion_feedback
+python phase6_ablation/scripts/run_self_verify_experiment.py          # baseline_self_verify
+```
+
+**Which loop produced the reported runs:** every run in `results.db` was produced by `phase6_ablation/runners/experiment_runner.py`, which drives `phase6_ablation/core/reflexion_loop.py`. In that loop the self-reflection call receives the failed trajectory, the pod status and prior reflections, but **not** the evaluator's textual failure reason (the reason field of the reflection prompt is left at its default); only the `full_reflexion_feedback` control fills it. The convenience tools `tools/run_test.py` and `tools/ablation_test_runner.py` import an older loop variant, `phase6_ablation/core/agents/reflexion_loop.py`, which does pass the evaluator's reason to the reflection call and does not implement the post-hoc controls. That variant was not used for any reported run; use the runner above to reproduce the paper's conditions.
 
 Note that LLM outputs are non-deterministic and API costs apply; the paper mitigates this with 10–25 repeated runs per (model, scenario, configuration) cell. All statistics reported in the paper are computed directly from `results.db`.
 
