@@ -2,9 +2,9 @@
 
 Experiment harness, benchmark scenarios, and results dataset for the paper:
 
-> **AI-Driven Kubernetes Incident Remediation with the Reflexion Framework**
-> Mustafa Mert Suerkan, Emin Kugu, Hakan Emekci
-> Department of Computer Engineering, TED University, Ankara, Turkey
+> **Evaluating Self-Reflective LLM Agents for Autonomous Kubernetes Troubleshooting**
+> Mustafa Mert Suerkan (TED University), Emin Kugu (TED University; Universitat Politècnica de València), Hakan Emekci (Hacettepe University)
+> *IEEE Access*, 2026 — accepted for publication (DOI to be added on publication)
 
 ## Overview
 
@@ -139,9 +139,24 @@ The second attempt itself drives nearly all of the improvement: the retry effect
 If you use this code or dataset, please cite:
 
 ```
-M. M. Suerkan, E. Kugu, and H. Emekci, "AI-Driven Kubernetes Incident
-Remediation with the Reflexion Framework," 2026. (under review)
+M. M. Suerkan, E. Kugu, and H. Emekci, "Evaluating self-reflective LLM agents
+for autonomous Kubernetes troubleshooting," IEEE Access, 2026, accepted for
+publication. DOI: to be added.
 ```
+
+BibTeX:
+
+```bibtex
+@article{suerkan2026reflexion,
+  author  = {Suerkan, Mustafa Mert and Kugu, Emin and Emekci, Hakan},
+  title   = {Evaluating Self-Reflective {LLM} Agents for Autonomous {Kubernetes} Troubleshooting},
+  journal = {IEEE Access},
+  year    = {2026},
+  note    = {Accepted for publication}
+}
+```
+
+A `CITATION.cff` file is included; GitHub's "Cite this repository" button uses it.
 
 ## License
 
