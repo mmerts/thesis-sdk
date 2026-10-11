@@ -3,7 +3,7 @@
 Experiment harness, benchmark scenarios, and results dataset for the paper:
 
 > **Evaluating Self-Reflective LLM Agents for Autonomous Kubernetes Troubleshooting**
-> Mustafa Mert Suerkan (TED University), Emin Kugu (TED University; Universitat Politècnica de València), Hakan Emekci (Hacettepe University)
+> Mustafa Mert Süerkan (TED University), Emin Kugu (TED University; Universitat Politècnica de València), Hakan Emekci (Hacettepe University)
 > *IEEE Access*, 2026 — accepted for publication (DOI to be added on publication)
 
 ## Overview
@@ -139,7 +139,7 @@ The second attempt itself drives nearly all of the improvement: the retry effect
 If you use this code or dataset, please cite:
 
 ```
-M. M. Suerkan, E. Kugu, and H. Emekci, "Evaluating self-reflective LLM agents
+M. M. Süerkan, E. Kugu, and H. Emekci, "Evaluating self-reflective LLM agents
 for autonomous Kubernetes troubleshooting," IEEE Access, 2026, accepted for
 publication. DOI: to be added.
 ```
@@ -148,7 +148,7 @@ BibTeX:
 
 ```bibtex
 @article{suerkan2026reflexion,
-  author  = {Suerkan, Mustafa Mert and Kugu, Emin and Emekci, Hakan},
+  author  = {S{\"u}erkan, Mustafa Mert and Kugu, Emin and Emekci, Hakan},
   title   = {Evaluating Self-Reflective {LLM} Agents for Autonomous {Kubernetes} Troubleshooting},
   journal = {IEEE Access},
   year    = {2026},
