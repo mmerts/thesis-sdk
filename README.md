@@ -4,7 +4,7 @@ Experiment harness, benchmark scenarios, and results dataset for the paper:
 
 > **Evaluating Self-Reflective LLM Agents for Autonomous Kubernetes Troubleshooting**
 > Mustafa Mert Süerkan (TED University), Emin Kugu (TED University; Universitat Politècnica de València), Hakan Emekci (Hacettepe University)
-> *IEEE Access*, 2026 — accepted for publication (DOI to be added on publication)
+> *IEEE Access*, 2026. DOI: [10.1109/ACCESS.2026.3743626](https://doi.org/10.1109/ACCESS.2026.3743626)
 
 ## Overview
 
@@ -140,8 +140,8 @@ If you use this code or dataset, please cite:
 
 ```
 M. M. Süerkan, E. Kugu, and H. Emekci, "Evaluating self-reflective LLM agents
-for autonomous Kubernetes troubleshooting," IEEE Access, 2026, accepted for
-publication. DOI: to be added.
+for autonomous Kubernetes troubleshooting," IEEE Access, 2026,
+doi: 10.1109/ACCESS.2026.3743626.
 ```
 
 BibTeX:
@@ -152,7 +152,8 @@ BibTeX:
   title   = {Evaluating Self-Reflective {LLM} Agents for Autonomous {Kubernetes} Troubleshooting},
   journal = {IEEE Access},
   year    = {2026},
-  note    = {Accepted for publication}
+  doi     = {10.1109/ACCESS.2026.3743626},
+  url     = {https://doi.org/10.1109/ACCESS.2026.3743626}
 }
 ```
 
